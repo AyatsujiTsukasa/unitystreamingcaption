@@ -13,10 +13,7 @@
 
 // Command livecaption pipes the stdin audio data to
 // Google Speech API and outputs the transcript.
-//
-// As an example, gst-launch can be used to capture the mic input:
-//
-//    $ gst-launch-1.0 -v pulsesrc ! audioconvert ! audioresample ! audio/x-raw,channels=1,rate=16000 ! filesink location=/dev/stdout | livecaption
+
 package main
 
 import (
@@ -26,6 +23,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	speech "cloud.google.com/go/speech/apiv1beta1"
 	"golang.org/x/net/context"
@@ -85,6 +83,7 @@ func main() {
 					Encoding:     speechpb.RecognitionConfig_LINEAR16,
 					SampleRate:   16000,
 				},
+				InterimResults: true,
 			},
 		},
 	}); err != nil {
@@ -92,10 +91,16 @@ func main() {
 	}
 
 	go func() {
-		// Pipe stdin to the API.
 		buf := make([]byte, 1024)
-		for {
-			n, err := os.Stdin.Read(buf)
+		threadScanner := bufio.NewScanner(os.Stdin)
+		for threadScanner.Scan() {
+			// get filepath form unity and get the raw file data
+			file, err := os.Open(filepath.Clean(threadScanner.Text()))
+			if err != nil {
+				log.Fatal(err)
+			}
+			n, err := file.Read(buf)
+			file.Close()
 			if err == io.EOF {
 				break // Nothing else to pipe, return from this goroutine.
 			}
@@ -126,8 +131,6 @@ func main() {
 			log.Fatalf("Could not recognize: %v", err)
 		}
 		for _, result := range resp.Results {
-
-			// fmt.Printf("Result: %+v\n", result)
 			fmt.Println(responcePrefix + result.Alternatives[0].Transcript)
 		}
 	}
