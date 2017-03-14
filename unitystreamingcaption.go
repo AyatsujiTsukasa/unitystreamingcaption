@@ -91,7 +91,7 @@ func main() {
 	}
 
 	go func() {
-		buf := make([]byte, 1024)
+		buf := make([]byte, 4096)
 		threadScanner := bufio.NewScanner(os.Stdin)
 		for threadScanner.Scan() {
 			// get filepath form unity and get the raw file data
@@ -101,12 +101,11 @@ func main() {
 			}
 			n, err := file.Read(buf)
 			file.Close()
-			if err == io.EOF {
-				break // Nothing else to pipe, return from this goroutine.
-			}
+			// if err == io.EOF {
+			// 	break // Nothing else to pipe, return from this goroutine.
+			// }
 			if err != nil {
-				log.Printf("Could not read from stdin: %v", err)
-				continue
+				log.Fatal(err)
 			}
 			if err = stream.Send(&speechpb.StreamingRecognizeRequest{
 				StreamingRequest: &speechpb.StreamingRecognizeRequest_AudioContent{
@@ -116,7 +115,6 @@ func main() {
 				log.Printf("Could not send audio: %v", err)
 			}
 		}
-		log.Println("end")
 	}()
 
 	for {
