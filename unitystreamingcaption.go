@@ -17,13 +17,11 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 
 	speech "cloud.google.com/go/speech/apiv1beta1"
 	"golang.org/x/net/context"
@@ -66,14 +64,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println("ready to start")
-	reader := bufio.NewScanner(os.Stdin)
-	for reader.Scan() {
-		if reader.Text() == "start" {
-			break
-		}
-	}
-
 	// Send the initial configuration message.
 	if err := stream.Send(&speechpb.StreamingRecognizeRequest{
 		StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
@@ -83,7 +73,8 @@ func main() {
 					Encoding:     speechpb.RecognitionConfig_LINEAR16,
 					SampleRate:   16000,
 				},
-				InterimResults: true,
+				InterimResults:  true,
+				SingleUtterance: true,
 			},
 		},
 	}); err != nil {
@@ -91,21 +82,16 @@ func main() {
 	}
 
 	go func() {
-		buf := make([]byte, 4096)
-		threadScanner := bufio.NewScanner(os.Stdin)
-		for threadScanner.Scan() {
-			// get filepath form unity and get the raw file data
-			file, err := os.Open(filepath.Clean(threadScanner.Text()))
-			if err != nil {
-				log.Fatal(err)
+		// Pipe stdin to the API.
+		buf := make([]byte, 8192)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if err == io.EOF {
+				return // Nothing else to pipe, return from this goroutine.
 			}
-			n, err := file.Read(buf)
-			file.Close()
-			// if err == io.EOF {
-			// 	break // Nothing else to pipe, return from this goroutine.
-			// }
 			if err != nil {
-				log.Fatal(err)
+				log.Printf("Could not read from stdin: %v", err)
+				continue
 			}
 			if err = stream.Send(&speechpb.StreamingRecognizeRequest{
 				StreamingRequest: &speechpb.StreamingRecognizeRequest_AudioContent{
@@ -129,7 +115,7 @@ func main() {
 			log.Fatalf("Could not recognize: %v", err)
 		}
 		for _, result := range resp.Results {
-			fmt.Println(responcePrefix + result.Alternatives[0].Transcript)
+			fmt.Printf("Result: %v\n", result.Alternatives[0].Transcript)
 		}
 	}
 	// [END speech_streaming_mic_recognize]
