@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"io"
@@ -38,8 +39,12 @@ var (
 func main() {
 	var credentialDir string
 	var language string
+	var singleUtteranceEnable bool
+	var outputAsBase64 bool
 	flag.StringVar(&credentialDir, "cred", "/path/to/file/", "path of google service account credential json file")
 	flag.StringVar(&language, "language", "ja-JP", "languagecode of voice")
+	flag.BoolVar(&singleUtteranceEnable, "s", false, "enable single utterance termination")
+	flag.BoolVar(&outputAsBase64, "base64", false, "output as base64 Encoding")
 	flag.Parse()
 
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credentialDir)
@@ -74,7 +79,7 @@ func main() {
 					SampleRate:   16000,
 				},
 				InterimResults:  true,
-				SingleUtterance: true,
+				SingleUtterance: singleUtteranceEnable,
 			},
 		},
 	}); err != nil {
@@ -115,7 +120,11 @@ func main() {
 			log.Fatalf("Could not recognize: %v", err)
 		}
 		for _, result := range resp.Results {
-			fmt.Printf("Result: %v\n", result.Alternatives[0].Transcript)
+			output := "Result: " + result.Alternatives[0].Transcript
+			if outputAsBase64 {
+				output = base64.StdEncoding.EncodeToString([]byte(output))
+			}
+			fmt.Println(output)
 		}
 	}
 	// [END speech_streaming_mic_recognize]
