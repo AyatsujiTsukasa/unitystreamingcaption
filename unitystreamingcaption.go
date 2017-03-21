@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -69,23 +70,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Send the initial configuration message.
-	if err := stream.Send(&speechpb.StreamingRecognizeRequest{
-		StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
-			StreamingConfig: &speechpb.StreamingRecognitionConfig{
-				Config: &speechpb.RecognitionConfig{
-					LanguageCode: language,
-					Encoding:     speechpb.RecognitionConfig_LINEAR16,
-					SampleRate:   16000,
-				},
-				InterimResults:  true,
-				SingleUtterance: singleUtteranceEnable,
-			},
-		},
-	}); err != nil {
-		log.Fatal(err)
-	}
-
 	go func() {
 		// Pipe stdin to the API.
 		buf := make([]byte, 8192)
@@ -108,6 +92,30 @@ func main() {
 		}
 	}()
 
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		if scanner.Text() == "start" {
+			break
+		}
+	}
+
+	// Send the initial configuration message.
+	if err := stream.Send(&speechpb.StreamingRecognizeRequest{
+		StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
+			StreamingConfig: &speechpb.StreamingRecognitionConfig{
+				Config: &speechpb.RecognitionConfig{
+					LanguageCode: language,
+					Encoding:     speechpb.RecognitionConfig_LINEAR16,
+					SampleRate:   16000,
+				},
+				InterimResults:  true,
+				SingleUtterance: singleUtteranceEnable,
+			},
+		},
+	}); err != nil {
+		log.Fatal(err)
+	}
+
 	for {
 		resp, err := stream.Recv()
 		if err == io.EOF {
@@ -125,6 +133,10 @@ func main() {
 				output = base64.StdEncoding.EncodeToString([]byte(output))
 			}
 			fmt.Println(output)
+			if result.IsFinal {
+				log.Println("EOS")
+				return
+			}
 		}
 	}
 	// [END speech_streaming_mic_recognize]
