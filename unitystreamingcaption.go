@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -38,6 +37,7 @@ var (
 )
 
 func main() {
+	log.SetOutput(os.Stderr)
 	var credentialDir string
 	var language string
 	var singleUtteranceEnable bool
@@ -70,35 +70,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go func() {
-		// Pipe stdin to the API.
-		buf := make([]byte, 8192)
-		for {
-			n, err := os.Stdin.Read(buf)
-			if err == io.EOF {
-				return // Nothing else to pipe, return from this goroutine.
-			}
-			if err != nil {
-				log.Printf("Could not read from stdin: %v", err)
-				continue
-			}
-			if err = stream.Send(&speechpb.StreamingRecognizeRequest{
-				StreamingRequest: &speechpb.StreamingRecognizeRequest_AudioContent{
-					AudioContent: buf[:n],
-				},
-			}); err != nil {
-				log.Printf("Could not send audio: %v", err)
-			}
-		}
-	}()
-
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		if scanner.Text() == "start" {
-			break
-		}
-	}
-
 	// Send the initial configuration message.
 	if err := stream.Send(&speechpb.StreamingRecognizeRequest{
 		StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
@@ -115,6 +86,31 @@ func main() {
 	}); err != nil {
 		log.Fatal(err)
 	}
+
+	log.Println("Caption is ready")
+
+	go func() {
+		// Pipe stdin to the API.
+		buf := make([]byte, 1024)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if err == io.EOF {
+				return // Nothing else to pipe, return from this goroutine.
+			}
+			if err != nil {
+				log.Printf("Could not read from stdin: %v", err)
+				continue
+			}
+			rqst := &speechpb.StreamingRecognizeRequest{
+				StreamingRequest: &speechpb.StreamingRecognizeRequest_AudioContent{
+					AudioContent: buf[:n],
+				},
+			}
+			if err = stream.Send(rqst); err != nil {
+				log.Printf("Could not send audio: %v", err)
+			}
+		}
+	}()
 
 	for {
 		resp, err := stream.Recv()
@@ -135,7 +131,6 @@ func main() {
 			fmt.Println(output)
 			if result.IsFinal {
 				log.Println("EOS")
-				return
 			}
 		}
 	}
