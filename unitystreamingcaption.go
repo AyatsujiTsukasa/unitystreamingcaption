@@ -124,13 +124,14 @@ func main() {
 			log.Fatalf("Could not recognize: %v", err)
 		}
 		for _, result := range resp.Results {
-			output := "Result: " + result.Alternatives[0].Transcript
+			output := result.Alternatives[0].Transcript
 			if outputAsBase64 {
 				output = base64.StdEncoding.EncodeToString([]byte(output))
 			}
-			fmt.Println(output)
 			if result.IsFinal {
-				log.Println("EOS")
+				fmt.Println("EOS:" + output)
+			} else {
+				fmt.Println(output)
 			}
 		}
 	}
